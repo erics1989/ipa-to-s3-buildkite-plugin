@@ -1,0 +1,27 @@
+name: IPA to S3 Buildkite Plugin
+description: A plugin that generates a QR code and posts it as a build annotation.
+author: "@mcncl"
+requirements:
+  - bash
+  - aws
+  - qrencode
+configuration:
+  properties:
+    s3-bucket:
+      type: string
+    bundle-id:
+      type: string
+    title:
+      type: string
+    ipa-path:
+      type: string
+    plist-path:
+      type: string
+    generate-qr-code:
+      type: boolean
+  required:
+    - title
+    - bundle-id
+    - plist-path
+    - s3-bucket
+  additionalProperties: false

@@ -1,0 +1,163 @@
+#!/bin/bash
+
+set -euo pipefail
+
+DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd)"
+
+# shellcheck source=lib/plugin.bash
+. "$DIR/../lib/plugin.bash"
+
+S3_BUCKET_URL=$(plugin_read_config "S3_BUCKET")
+APP_TITLE=$(plugin_read_config "TITLE")
+IPA_PATH=$(plugin_read_config "IPA_PATH")
+PLIST_PATH=$(plugin_read_config "PLIST_PATH")
+BUNDLE_ID=$(plugin_read_config "BUNDLE_ID")
+GENERATE_QR="$(plugin_read_config "GENERATE_QR_CODE")"
+GENERATE_QR="${GENERATE_QR:-true}"
+
+
+if [ -z "${APP_TITLE}" ]; then
+  echo 'No app title provided.'
+  exit 1
+fi
+
+if [ -z "${S3_BUCKET_URL}" ]; then
+  echo 'No S3 bucket URL provided.'
+  exit 1
+fi
+
+if [ -z "${IPA_PATH}" ]; then
+  IPA_PATH="${APP_TITLE}.ipa"
+fi
+
+if [ -z "${PLIST_PATH}" ]; then
+  PLIST_PATH="app.plist"
+fi
+
+if [ -z "${BUNDLE_ID}" ]; then
+  echo "No bundle ID provided."
+  exit 1
+fi
+
+upload_ipa_to_s3() {
+  local output
+  if output=$(aws s3 cp --quiet --content-type "application/octet-stream ipa" "${IPA_PATH}" "s3://${S3_BUCKET_URL}/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${IPA_PATH}" 2>&1); then
+    echo "https://${S3_BUCKET_URL}.s3.amazonaws.com/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${IPA_PATH}"
+  else
+    echo "Error uploading IPA to S3: ${output}" >&2
+    return 1
+  fi
+}
+
+upload_plist_to_s3() {
+  local output
+  if output=$(aws s3 cp --quiet --content-type "application/xml plist" "${PLIST_PATH}" "s3://${S3_BUCKET_URL}/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${PLIST_PATH}" 2>&1); then
+    echo "https://${S3_BUCKET_URL}.s3.amazonaws.com/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${PLIST_PATH}"
+  else
+    echo "Error uploading PLIST to S3: ${output}" >&2
+    return 1
+  fi
+}
+
+generate_plist() {
+  local ipa_url="$1"
+  cat > "${PLIST_PATH}" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>assets</key>
+            <array>
+                <dict>
+                    <key>kind</key>
+                    <string>software-package</string>
+                    <key>url</key>
+                    <string>${ipa_url}</string>
+                </dict>
+            </array>
+            <key>metadata</key>
+            <dict>
+                <key>bundle-identifier</key>
+                <string>${BUNDLE_ID}</string>
+                <key>bundle-version</key>
+                <string>${BUILDKITE_BUILD_NUMBER}</string>
+                <key>kind</key>
+                <string>software</string>
+                <key>title</key>
+                <string>${APP_TITLE}</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>
+EOF
+}
+
+generate_qr_code() {
+  local plist_url="$1"
+  local qr_code_path="$2"
+  
+  local qr_code_url="itms-services://?action=download-manifest&url=${plist_url}"
+  qrencode -o "${qr_code_path}" -s 5 "${qr_code_url}"
+}
+
+generate_annotation(){
+  local qr_code_url="$1"
+  local include_qr="$2"
+
+  cat << EOF > annotation.html
+  <div class="flex flex-column items-center">
+    <h3 class="h3 mb2">iOS App Installation</h3>
+EOF
+
+  if [ "$include_qr" != "false" ]; then
+    echo '    <img class="mb2" src="artifact://qr_code.png" alt="install app" height=400 >' >> annotation.html
+  fi
+  cat << EOF >> annotation.html
+    <a href="${qr_code_url}">Install ${APP_TITLE} App</a>
+  </div>
+EOF
+}
+
+upload_qr_code() {
+  local qr_code_path="$1"
+  
+  buildkite-agent artifact upload "${qr_code_path}"
+}
+
+annotate_build() {
+  # shellcheck disable=SC2002
+  cat annotation.html |  buildkite-agent annotate --style "info" --context "${BUILDKITE_STEP_ID}"
+}
+
+main() {
+  local IPA_URL=""
+  if ! IPA_URL=$(upload_ipa_to_s3); then
+    echo "Failed to upload IPA file. Exiting." >&2
+    exit 1
+  fi
+
+  generate_plist "${IPA_URL}"
+
+  local PLIST_URL=""
+  if ! PLIST_URL=$(upload_plist_to_s3); then
+    echo "Failed to upload PLIST file. Exiting." >&2
+    exit 1
+  fi
+
+  local QR_CODE_URL="itms-services://?action=download-manifest&url=${PLIST_URL}"
+
+  if [ "$GENERATE_QR" != "false" ] && { [ -n "$GENERATE_QR" ] || [ "$GENERATE_QR" = "1" ] || [ "$GENERATE_QR" = "yes" ]; }; then
+    local QR_CODE_PATH="qr_code.png"
+    generate_qr_code "${PLIST_URL}" "${QR_CODE_PATH}"
+    upload_qr_code "${QR_CODE_PATH}"
+  fi
+
+  generate_annotation "${QR_CODE_URL}" "${GENERATE_QR}"
+  annotate_build
+}
+
+main
