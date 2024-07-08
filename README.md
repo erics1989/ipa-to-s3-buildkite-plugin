@@ -2,6 +2,8 @@
 
 A Buildkite plugin that will push an IPA to S3 and output both a link and a QR code as an annotation for easy download/install.
 
+In order to push to S3, you will need to ensure that permissions are in place to perform `PUT` actions on buckets. The use of an additional plugin, such as [AWS assume-role-with-web-identity](https://github.com/buildkite-plugins/aws-assume-role-with-web-identity-buildkite-plugin) is recommended.
+
 This plugin requires the presence of the `qrencode` CLI tool, it can be installed for your instance using:
 
 ### Ubuntu, Debian, Linux Mint:
