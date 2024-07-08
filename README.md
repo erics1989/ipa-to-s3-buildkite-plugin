@@ -1,4 +1,4 @@
-# IPA to S3 Buildkite Plugin
+# IPA to S3 Buildkite Plugin [![Build status](https://badge.buildkite.com/31bfa41909ffb8938423132924082e517f345017853d7e1a38.svg)](https://buildkite.com/buildkite/plugins-ipa-to-s3)
 
 A Buildkite plugin that will push an [IPA](https://en.wikipedia.org/wiki/.ipa) to S3 and output both a link and a QR code as an annotation for easy download/install.
 
