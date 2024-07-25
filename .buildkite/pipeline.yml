@@ -1,3 +1,6 @@
+agents:
+  queue: "hosted"
+
 steps:
   - label: ":shell: Tests"
     plugins:
@@ -9,7 +12,6 @@ steps:
     plugins:
       - plugin-linter#v3.3.0:
           id: ipa-to-s3
-    soft_fail: true
 
   - label: ":shell: Shellcheck"
     plugins:
