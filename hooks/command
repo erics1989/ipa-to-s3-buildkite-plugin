@@ -42,7 +42,13 @@ fi
 upload_ipa_to_s3() {
   local output
   if output=$(aws s3 cp --quiet --content-type "application/octet-stream ipa" "${IPA_PATH}" "s3://${S3_BUCKET_URL}/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${IPA_PATH}" 2>&1); then
-    echo "https://${S3_BUCKET_URL}.s3.amazonaws.com/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${IPA_PATH}"
+    # echo "https://${S3_BUCKET_URL}.s3.amazonaws.com/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${IPA_PATH}"
+    if output=$(aws s3 presign "s3://${S3_BUCKET_URL}/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${IPA_PATH}" --expires-in 604800)
+      echo "${output}"
+    else
+      echo "Error generating presigned url: ${output}" > &2
+      return 1
+    fi
   else
     echo "Error uploading IPA to S3: ${output}" >&2
     return 1
