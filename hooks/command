@@ -46,7 +46,7 @@ upload_ipa_to_s3() {
     if output=$(aws s3 presign "s3://${S3_BUCKET_URL}/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${IPA_PATH}" --expires-in 604800)
       echo "${output}"
     else
-      echo "Error generating presigned url: ${output}" > &2
+      echo "Error generating presigned url: ${output}" >&2
       return 1
     fi
   else
