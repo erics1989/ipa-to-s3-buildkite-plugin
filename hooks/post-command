@@ -58,7 +58,12 @@ upload_ipa_to_s3() {
 upload_plist_to_s3() {
   local output
   if output=$(aws s3 cp --quiet --content-type "application/xml plist" "${PLIST_PATH}" "s3://${S3_BUCKET_URL}/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${PLIST_PATH}" 2>&1); then
-    echo "https://${S3_BUCKET_URL}.s3.amazonaws.com/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${PLIST_PATH}"
+    # echo "s3://${S3_BUCKET_URL}/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${PLIST_PATH}"
+    if output=$(aws s3 presign "s3://${S3_BUCKET_URL}/${APP_TITLE}/${BUILDKITE_BUILD_NUMBER}/${PLIST_PATH}" --expires-in 604800 2>&1); then
+      echo "${output}"
+    else
+      echo "Error generating presigned url: ${output}" >&2
+      return 1
   else
     echo "Error uploading PLIST to S3: ${output}" >&2
     return 1
